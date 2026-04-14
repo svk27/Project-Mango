@@ -7,15 +7,7 @@ This repository includes an interactive Ubuntu 24.04 LTS setup script for Codex 
 Download the script from GitHub and run it on the target VPS:
 
 ```bash
-curl -fsSL -o codex-setup.sh https://raw.githubusercontent.com/my-org/my-repo/main/Layer2Setup/codex-setup.sh && chmod +x codex-setup.sh && ./codex-setup.sh
-```
-
-If you prefer separate steps:
-
-```bash
-curl -fsSL -o codex-setup.sh https://raw.githubusercontent.com/my-org/my-repo/main/Layer2Setup/codex-setup.sh
-chmod +x codex-setup.sh
-./codex-setup.sh
+curl -fsSL -o codex-setup.sh https://raw.githubusercontent.com/svk27/Project-Mango/refs/heads/main/Layer2Setup/codex-setup.sh && chmod +x codex-setup.sh && ./codex-setup.sh
 ```
 
 ## What the script does
