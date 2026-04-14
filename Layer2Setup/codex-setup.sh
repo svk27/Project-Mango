@@ -47,9 +47,9 @@ choose_option() {
   local options=("$@")
   local i choice
 
-  printf '%s\n' "$prompt"
+  printf '%s\n' "$prompt" >&2
   for i in "${!options[@]}"; do
-    printf '  %s) %s\n' "$((i + 1))" "${options[$i]}"
+    printf '  %s) %s\n' "$((i + 1))" "${options[$i]}" >&2
   done
 
   while true; do
@@ -58,7 +58,7 @@ choose_option() {
       printf '%s' "${options[$((choice - 1))]}"
       return 0
     fi
-    printf '%s\n' "Invalid choice. Try again."
+    printf '%s\n' "Invalid choice. Try again." >&2
   done
 }
 
@@ -72,7 +72,7 @@ read_required() {
       printf '%s' "$value"
       return 0
     fi
-    printf '%s\n' "This value is required."
+    printf '%s\n' "This value is required." >&2
   done
 }
 
@@ -82,12 +82,12 @@ read_secret_required() {
 
   while true; do
     read -r -s -p "$prompt: " value
-    printf '\n'
+    printf '\n' >&2
     if [[ -n "$value" ]]; then
       printf '%s' "$value"
       return 0
     fi
-    printf '%s\n' "This value is required."
+    printf '%s\n' "This value is required." >&2
   done
 }
 
