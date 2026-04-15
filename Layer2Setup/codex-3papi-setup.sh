@@ -58,7 +58,6 @@ check_codex_installation() {
 
     print_warning "Codex CLI not found in current PATH. Searching common directories..."
     
-    # Common npm global install paths
     POSSIBLE_PATHS=(
         "$HOME/.npm-global/bin"
         "/usr/local/bin"
@@ -71,7 +70,6 @@ check_codex_installation() {
     for p in "${POSSIBLE_PATHS[@]}"; do
         if [ -x "$p/codex" ]; then
             export PATH="$p:$PATH"
-            # Append to bashrc to fix it permanently for the user
             if ! grep -q "export PATH=\"$p:\$PATH\"" "$HOME/.bashrc"; then
                 echo "export PATH=\"$p:\$PATH\"" >> "$HOME/.bashrc"
             fi
@@ -94,7 +92,6 @@ check_codex_installation
 # ==========================================
 # Python TOML Manager Setup
 # ==========================================
-# We create a temporary python script to safely read/write the TOML file
 PYTHON_HELPER="/tmp/codex_toml_helper.py"
 cat << 'EOF' > "$PYTHON_HELPER"
 import sys, json, os
@@ -109,24 +106,48 @@ CONFIG_PATH = os.path.expanduser("~/.codex/config.toml")
 
 def load_config():
     if not os.path.exists(CONFIG_PATH):
-        return {"model_providers": [], "profiles": []}
+        return {"model_providers": {}, "profiles": {}}
     with open(CONFIG_PATH, "rb") as f:
         try:
-            return tomllib.load(f)
+            data = tomllib.load(f)
+            
+            # Migration: convert old Array of Tables `[[model_providers]]` to Nested Tables `[model_providers.id]`
+            if isinstance(data.get("model_providers"), list):
+                new_mp = {}
+                for item in data["model_providers"]:
+                    if "id" in item:
+                        pid = item.pop("id")
+                        new_mp[pid] = item
+                data["model_providers"] = new_mp
+                
+            if isinstance(data.get("profiles"), list):
+                new_prof = {}
+                for item in data["profiles"]:
+                    if "id" in item:
+                        pid = item.pop("id")
+                        new_prof[pid] = item
+                data["profiles"] = new_prof
+                
+            if "model_providers" not in data: data["model_providers"] = {}
+            if "profiles" not in data: data["profiles"] = {}
+            return data
         except Exception:
-            return {"model_providers": [], "profiles": []}
+            return {"model_providers": {}, "profiles": {}}
 
 def save_config(data):
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
     with open(CONFIG_PATH, "w") as f:
-        for p in data.get("model_providers", []):
-            f.write("[[model_providers]]\n")
-            for k, v in p.items():
+        # Write Model Providers
+        for pid, pdata in data.get("model_providers", {}).items():
+            f.write(f"[model_providers.{pid}]\n")
+            for k, v in pdata.items():
                 f.write(f'{k} = "{v}"\n')
             f.write("\n")
-        for p in data.get("profiles", []):
-            f.write("[[profiles]]\n")
-            for k, v in p.items():
+            
+        # Write Profiles
+        for pid, pdata in data.get("profiles", {}).items():
+            f.write(f"[profiles.{pid}]\n")
+            for k, v in pdata.items():
                 f.write(f'{k} = "{v}"\n')
             f.write("\n")
 
@@ -135,32 +156,36 @@ cmd = sys.argv[1]
 data = load_config()
 
 if cmd == "get_providers":
-    print(json.dumps(data.get("model_providers", [])))
+    out = []
+    for k, v in data.get("model_providers", {}).items():
+        v["id"] = k
+        out.append(v)
+    print(json.dumps(out))
 elif cmd == "get_profiles":
-    print(json.dumps(data.get("profiles", [])))
+    out = []
+    for k, v in data.get("profiles", {}).items():
+        v["id"] = k
+        out.append(v)
+    print(json.dumps(out))
 elif cmd == "add_provider":
     new_p = json.loads(sys.argv[2])
-    if "model_providers" not in data: data["model_providers"] = []
-    data["model_providers"].append(new_p)
+    pid = new_p.pop("id")
+    data["model_providers"][pid] = new_p
     save_config(data)
 elif cmd == "update_provider":
-    target_id, updates = sys.argv[2], json.loads(sys.argv[3])
-    for p in data.get("model_providers", []):
-        if p.get("id") == target_id:
-            p.update(updates)
-            break
+    pid, updates = sys.argv[2], json.loads(sys.argv[3])
+    if pid in data.get("model_providers", {}):
+        data["model_providers"][pid].update(updates)
     save_config(data)
 elif cmd == "add_profile":
     new_p = json.loads(sys.argv[2])
-    if "profiles" not in data: data["profiles"] = []
-    data["profiles"].append(new_p)
+    pid = new_p.pop("id")
+    data["profiles"][pid] = new_p
     save_config(data)
 elif cmd == "update_profile":
-    target_id, updates = sys.argv[2], json.loads(sys.argv[3])
-    for p in data.get("profiles", []):
-        if p.get("id") == target_id:
-            p.update(updates)
-            break
+    pid, updates = sys.argv[2], json.loads(sys.argv[3])
+    if pid in data.get("profiles", {}):
+        data["profiles"][pid].update(updates)
     save_config(data)
 EOF
 
@@ -184,13 +209,23 @@ ensure_v1_url() {
 fetch_models() {
     local base_url="$1"
     local env_key="$2"
-    local actual_key="${!env_key}"
+    local actual_key=""
 
+    # 1. Check if it's a valid bash variable name (to avoid the bad substitution error)
+    if [[ "$env_key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+        actual_key="${!env_key}"
+    fi
+
+    # 2. If it wasn't a valid variable or was empty, see if they passed the raw API Key
     if [ -z "$actual_key" ]; then
-        print_warning "Environment variable $env_key is not currently set in this session."
-        read -s -p "Enter your API key temporarily just to fetch the model list (it won't be saved): " temp_key
-        echo
-        actual_key="$temp_key"
+        if [[ "$env_key" == sk-* ]] || [[ ! "$env_key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+            actual_key="$env_key" # They entered the raw key directly
+        else
+            print_warning "Environment variable $env_key is not currently set."
+            read -s -p "Enter your API key temporarily just to fetch the model list (it won't be saved): " temp_key
+            echo
+            actual_key="$temp_key"
+        fi
     fi
 
     print_info "Attempting to fetch models from $base_url/models..."
@@ -215,18 +250,18 @@ add_provider() {
     print_header
     echo -e "${MAGENTA}--- Add New Model Provider ---${NC}\n"
     
-    read -p "ID (e.g. together_ai): " p_id
-    read -p "Name (e.g. Together AI): " p_name
-    read -p "Base URL (e.g. https://api.together.xyz/v1): " p_url
+    read -p "ID (e.g. sambanova): " p_id
+    read -p "Name (e.g. SambaNova): " p_name
+    read -p "Base URL (e.g. https://api.sambanova.ai/v1): " p_url
     p_url=$(ensure_v1_url "$p_url")
-    read -p "Environment Key Name (e.g. TOGETHER_API_KEY): " p_env
+    read -p "Environment Key Name (e.g. SAMBANOVA_API_KEY): " p_env
     
     local json_data
     json_data=$(jq -n --arg id "$p_id" --arg name "$p_name" --arg url "$p_url" --arg env "$p_env" \
         '{id: $id, name: $name, base_url: $url, env_key: $env}')
     
     python3 "$PYTHON_HELPER" add_provider "$json_data"
-    print_success "Model Provider '$p_name' added successfully!"
+    print_success "Model Provider '$p_id' added successfully!"
     sleep 2
 }
 
@@ -297,15 +332,22 @@ add_profile() {
         return
     fi
     
-    read -p "Profile ID (e.g. personal_coder): " prof_id
+    read -p "Profile ID (e.g. my_coder): " prof_id
     echo -e "\n${CYAN}Select Model Provider for this profile:${NC}"
     
     for i in $(seq 0 $((len-1))); do
         local name=$(echo "$providers" | jq -r ".[$i].name")
-        echo "$((i+1))) $name"
+        local p_id=$(echo "$providers" | jq -r ".[$i].id")
+        echo "$((i+1))) $name ($p_id)"
     done
     
     read -p "Selection: " prov_sel
+    if [[ ! "$prov_sel" =~ ^[0-9]+$ ]] || [ "$prov_sel" -le 0 ] || [ "$prov_sel" -gt "$len" ]; then
+        print_error "Invalid selection."
+        sleep 2
+        return
+    fi
+
     local idx=$((prov_sel-1))
     local prov_id=$(echo "$providers" | jq -r ".[$idx].id")
     local prov_url=$(echo "$providers" | jq -r ".[$idx].base_url")
@@ -370,14 +412,13 @@ edit_profile() {
     echo -e "\nCurrent Model: ${YELLOW}$old_model${NC}"
     read -p "Do you want to fetch the model list from Provider '$new_prov'? [y/N]: " fetch_m
     if [[ "$fetch_m" =~ ^[Yy]$ ]]; then
-        # Find provider details
         local p_url=$(echo "$providers" | jq -r ".[] | select(.id==\"$new_prov\") | .base_url")
         local p_env=$(echo "$providers" | jq -r ".[] | select(.id==\"$new_prov\") | .env_key")
-        if [ -n "$p_url" ]; then
+        if [ -n "$p_url" ] && [ "$p_url" != "null" ]; then
              local models_list=$(fetch_models "$p_url" "$p_env")
              echo -e "\n$models_list\n"
         else
-             print_error "Provider $new_prov not found in config."
+             print_error "Provider '$new_prov' not found in config."
         fi
     fi
     
