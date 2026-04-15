@@ -80,7 +80,7 @@ print_success "System updated successfully!"
 # ==========================================
 print_stage "Stage 2/5: Installing Required Dependencies"
 echo "Installing core utilities (curl, wget, git, build-essential)..."
-apt-get install -y curl wget git build-essential jq
+apt-get install -y curl wget git build-essential jq python3
 
 echo "Setting up NodeSource repository for Node.js (v22 is recommended for Codex CLI)..."
 curl -fsSL https://deb.nodesource.com/setup_22.x -o nodesource_setup.sh
