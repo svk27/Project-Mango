@@ -11,13 +11,6 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Ensure we're not running as root directly (we will use sudo when needed)
-if [ "$EUID" -eq 0 ]; then
-  echo -e "${RED}Please do not run this script as root. Run it as your normal user.${NC}"
-  echo -e "The script will automatically request 'sudo' privileges when required."
-  exit 1
-fi
-
 # Utility functions for UI
 print_stage() { echo -e "\n${BLUE}====================================================${NC}"; echo -e "${BLUE}▶ ${YELLOW}$1${NC}"; echo -e "${BLUE}====================================================${NC}"; }
 print_step() { echo -e "${BLUE}==>${NC} $1"; }
@@ -52,6 +45,20 @@ prompt_yes_no() {
     fi
 }
 
+# Ensure we handle root user scenarios properly on fresh VPS instances
+if [ "$EUID" -eq 0 ]; then
+  echo -e "${YELLOW}⚠️ WARNING: You are running this script as root.${NC}"
+  echo -e "This is common on a fresh VPS, but generally it's safer to use a non-root user."
+  prompt_yes_no "Do you want to proceed as root anyway?" PROCEED_AS_ROOT
+  if [ "$PROCEED_AS_ROOT" = "false" ]; then
+    echo -e "${RED}Aborting setup.${NC} Please create a normal user and run this script again."
+    exit 1
+  fi
+  SUDO="" # Root doesn't need sudo (and it might not be installed)
+else
+  SUDO="sudo"
+fi
+
 echo -e "${GREEN}"
 echo "   ____ _                 _         ____ _     ___   ____       _               "
 echo "  / ___| | __ _ _   _  __| | ___   / ___| |   |_ _| / ___|  ___| |_ _   _ _ __  "
@@ -66,9 +73,9 @@ echo -e "${NC}Welcome! Let's get your Ubuntu 24.04 ready for the Claude Code CLI
 # ------------------------------------------------------------------------------
 print_stage "Stage 1: Updating and Upgrading System"
 print_step "Running apt update..."
-sudo apt-get update -y
+$SUDO apt-get update -y
 print_step "Running apt upgrade (this might take a moment)..."
-sudo apt-get upgrade -y
+$SUDO apt-get upgrade -y
 print_success "System is fully updated!"
 
 # ------------------------------------------------------------------------------
@@ -76,7 +83,7 @@ print_success "System is fully updated!"
 # ------------------------------------------------------------------------------
 print_stage "Stage 2: Installing Dependencies"
 print_step "Installing curl, wget, jq, and build-essential..."
-sudo apt-get install -y curl wget jq build-essential software-properties-common git unzip
+$SUDO apt-get install -y curl wget jq build-essential software-properties-common git unzip
 print_success "Dependencies installed successfully!"
 
 # ------------------------------------------------------------------------------
