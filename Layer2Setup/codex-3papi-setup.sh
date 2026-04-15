@@ -90,9 +90,22 @@ check_codex_installation() {
 check_codex_installation
 
 # ==========================================
-# Python TOML Manager Setup
+# Python TOML Manager Setup & Cleanup Trap
 # ==========================================
 PYTHON_HELPER="/tmp/codex_toml_helper.py"
+
+cleanup_on_exit() {
+    rm -f "$PYTHON_HELPER"
+    echo -e "\n${YELLOW}================================================================${NC}"
+    echo -e "${CYAN} IMPORTANT: To apply any API key changes to your current session,${NC}"
+    echo -e "${CYAN} please run the following command now:${NC}"
+    echo -e "${GREEN} source ~/.bashrc${NC}"
+    echo -e "${YELLOW}================================================================${NC}\n"
+}
+
+# This trap ensures the message and cleanup happen on ANY exit (normal or Ctrl+C)
+trap cleanup_on_exit EXIT
+
 cat << 'EOF' > "$PYTHON_HELPER"
 import sys, json, os
 
@@ -518,10 +531,6 @@ while true; do
         2) menu_profiles ;;
         3) 
             print_success "Setup complete. Configuration saved to ~/.codex/config.toml"
-            rm -f "$PYTHON_HELPER"
-            # Explicit instruction about loading .bashrc
-            echo -e "\n${YELLOW}Note: If you added or changed any API Keys, run the following command to load them immediately:${NC}"
-            echo -e "${CYAN}source ~/.bashrc${NC}\n"
             exit 0 
             ;;
         *) 
