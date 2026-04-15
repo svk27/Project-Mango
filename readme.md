@@ -12,6 +12,11 @@ Simple Ubuntu 24.04 LTS setup scripts for both Claude Code and Codex:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/svk27/Project-Mango/refs/heads/main/Layer2Setup/codex_setup.sh | sudo bash
 ```
+```bash
+# in case the codex_setup.sh does not auto starts the next phase..
+# also can be used to manage Codex 3P APIs ANYTIME.
+curl -fsSL https://raw.githubusercontent.com/svk27/Project-Mango/refs/heads/main/Layer2Setup/codex-3papi-setup.sh | sudo bash
+```
 
 ### Claude Code
 
