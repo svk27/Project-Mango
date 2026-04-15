@@ -244,6 +244,23 @@ fetch_models() {
     fi
 }
 
+save_api_key_securely() {
+    local key_name="$1"
+    local raw_key="$2"
+    
+    if [ -n "$raw_key" ]; then
+        # Remove old key if it exists to avoid duplicating lines
+        sed -i "/export ${key_name}=/d" ~/.bashrc
+        
+        # Append new key
+        echo "export ${key_name}=\"${raw_key}\"" >> ~/.bashrc
+        
+        # Export for current session execution
+        export "${key_name}=${raw_key}"
+        print_success "API Key securely saved to ~/.bashrc (Env: $key_name)"
+    fi
+}
+
 # --- MODEL PROVIDER FLOWS ---
 
 add_provider() {
@@ -251,10 +268,19 @@ add_provider() {
     echo -e "${MAGENTA}--- Add New Model Provider ---${NC}\n"
     
     read -p "ID (e.g. sambanova): " p_id
+    
+    # Auto-generate Env Key (replace hyphens with underscores for bash compatibility)
+    p_env=$(echo "${p_id}_api" | sed 's/-/_/g')
+    print_info "Auto-generated Environment Key Name: $p_env"
+    
     read -p "Name (e.g. SambaNova): " p_name
     read -p "Base URL (e.g. https://api.sambanova.ai/v1): " p_url
     p_url=$(ensure_v1_url "$p_url")
-    read -p "Environment Key Name (e.g. SAMBANOVA_API_KEY): " p_env
+    
+    read -s -p "Enter actual API Key for $p_name: " raw_api_key
+    echo
+    
+    save_api_key_securely "$p_env" "$raw_api_key"
     
     local json_data
     json_data=$(jq -n --arg id "$p_id" --arg name "$p_name" --arg url "$p_url" --arg env "$p_env" \
@@ -305,8 +331,15 @@ edit_provider() {
         new_url=$(ensure_v1_url "$new_url")
     fi
     
-    read -p "Env Key [$old_env]: " new_env
-    new_env=${new_env:-$old_env}
+    # Auto-generate / enforce naming convention for env_key during edits as well
+    new_env=$(echo "${target_id}_api" | sed 's/-/_/g')
+    
+    read -s -p "New API Key [Leave blank to keep existing key]: " raw_api_key
+    echo
+    
+    if [ -n "$raw_api_key" ]; then
+        save_api_key_securely "$new_env" "$raw_api_key"
+    fi
     
     local json_data
     json_data=$(jq -n --arg name "$new_name" --arg url "$new_url" --arg env "$new_env" \
@@ -486,6 +519,9 @@ while true; do
         3) 
             print_success "Setup complete. Configuration saved to ~/.codex/config.toml"
             rm -f "$PYTHON_HELPER"
+            # Explicit instruction about loading .bashrc
+            echo -e "\n${YELLOW}Note: If you added or changed any API Keys, run the following command to load them immediately:${NC}"
+            echo -e "${CYAN}source ~/.bashrc${NC}\n"
             exit 0 
             ;;
         *) 
