@@ -17,7 +17,7 @@ print_step() { echo -e "${BLUE}==>${NC} $1"; }
 print_success() { echo -e "${GREEN}✓${NC} $1"; }
 print_error() { echo -e "${RED}✗ Error:${NC} $1"; }
 
-# Helper to read input even when the script is piped via `curl ... | bash`
+# Helper to read input safely
 prompt_input() {
     local message="$1"
     local var_name="$2"
@@ -54,7 +54,7 @@ if [ "$EUID" -eq 0 ]; then
     echo -e "${RED}Aborting setup.${NC} Please create a normal user and run this script again."
     exit 1
   fi
-  SUDO="" # Root doesn't need sudo (and it might not be installed)
+  SUDO="" # Root doesn't need sudo
 else
   SUDO="sudo"
 fi
@@ -87,6 +87,32 @@ $SUDO apt-get install -y curl wget jq build-essential software-properties-common
 print_success "Dependencies installed successfully!"
 
 # ------------------------------------------------------------------------------
+# STAGE 2.5: Check Memory / Prevent OOM Killer
+# ------------------------------------------------------------------------------
+print_stage "Stage 2.5: System Resource Check (OOM Prevention)"
+TOTAL_MEM=$(free -m | awk '/^Mem:/{print $2}')
+TOTAL_SWAP=$(free -m | awk '/^Swap:/{print $2}')
+
+print_step "Detected Memory - RAM: ${TOTAL_MEM}MB, Swap: ${TOTAL_SWAP}MB"
+
+if [ "$TOTAL_SWAP" -eq 0 ] && [ "$TOTAL_MEM" -lt 2048 ]; then
+    print_step "Low memory detected with 0 Swap space. The installation might be 'Killed' by the OS."
+    prompt_yes_no "Do you want to automatically create a 2GB Swap file to prevent this?" CREATE_SWAP
+    if [ "$CREATE_SWAP" = "true" ]; then
+        print_step "Creating 2GB swap file... (this may take a few seconds)"
+        $SUDO fallocate -l 2G /swapfile || $SUDO dd if=/dev/zero of=/swapfile bs=1M count=2048
+        $SUDO chmod 600 /swapfile
+        $SUDO mkswap /swapfile
+        $SUDO swapon /swapfile
+        print_success "Swap file created and activated!"
+    else
+        print_step "Skipping swap creation. If the next stage fails, please run the script again and accept this."
+    fi
+else
+    print_success "System memory resources look sufficient!"
+fi
+
+# ------------------------------------------------------------------------------
 # STAGE 3: Install Claude Code CLI
 # ------------------------------------------------------------------------------
 print_stage "Stage 3: Installing Claude Code CLI"
@@ -95,7 +121,8 @@ curl -fsSL https://claude.ai/install.sh | bash
 if [ $? -eq 0 ]; then
     print_success "Claude Code CLI installed successfully!"
 else
-    print_error "Failed to install Claude Code CLI. Please check your internet connection."
+    print_error "Failed to install Claude Code CLI."
+    echo -e "${RED}If it says 'Killed', your VPS ran out of memory. Try creating a swap file manually.${NC}"
     exit 1
 fi
 
