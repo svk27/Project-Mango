@@ -3,6 +3,13 @@
 # Exit on unexpected errors
 set -e
 
+# Override 'read' to always read from /dev/tty.
+# This prevents the script from instantly skipping prompts and exiting 
+# when it is executed via a pipe (e.g., curl ... | bash).
+read() {
+    command read "$@" < /dev/tty
+}
+
 # ==========================================
 # UI Helpers & Colors
 # ==========================================
