@@ -1,4 +1,4 @@
-# Claude Code & Codex CLI Setup
+# Project Mango Setup
 
 Simple Ubuntu 24.04 LTS setup scripts for both Claude Code and Codex:
 
