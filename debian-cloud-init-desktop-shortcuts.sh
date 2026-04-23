@@ -24,8 +24,8 @@ else
     log "Warning: VS Code desktop file not found in /usr/share/applications/"
 fi
 
-if [ -f /usr/share/applications/github-desk.desktop ]; then
-    cp /usr/share/applications/github-desk.desktop "$DESKTOP_DIR/github-desktop.desktop"
+if [ -f /usr/share/applications/github-desktop.desktop ]; then
+    cp /usr/share/applications/github-desktop.desktop "$DESKTOP_DIR/github-desktop.desktop"
     log "Copied GitHub Desktop shortcut."
 else
     log "Warning: GitHub Desktop desktop file not found in /usr/share/applications/"
