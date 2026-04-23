@@ -35,7 +35,7 @@ print_error() {
 # Pre-Flight Checks
 # ==========================================
 echo -e "${CYAN}Welcome to the Codex CLI Setup Wizard!${NC}"
-echo -e "This script will prepare your Ubuntu 24.04 system, install dependencies, and configure Codex.\n"
+echo -e "This script will prepare your Debian 13 system, install dependencies, and configure Codex.\n"
 
 # 1. Check for root privileges
 if [ "$EUID" -ne 0 ]; then
@@ -44,7 +44,20 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# 2. Check RAM and handle Swap for fresh VPS environments
+# 2. Check for Debian 13 exclusively
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    # Ensure ID is debian and VERSION_ID starts with 13
+    if [ "$ID" != "debian" ] || [[ ! "$VERSION_ID" =~ ^13 ]]; then
+        print_error "This script is designed exclusively for Debian 13. Detected OS: $PRETTY_NAME"
+        exit 1
+    fi
+else
+    print_error "Cannot determine the operating system. This script requires Debian 13."
+    exit 1
+fi
+
+# 3. Check RAM and handle Swap for fresh VPS environments
 TOTAL_RAM=$(free -m | awk '/^Mem:/{print $2}')
 if [ "$TOTAL_RAM" -lt 2000 ]; then
     print_warning "Low RAM detected (${TOTAL_RAM}MB). To prevent crashes, setting up a 2GB Swap file..."
@@ -68,7 +81,7 @@ fi
 # ==========================================
 # Stage 1: System Update
 # ==========================================
-print_stage "Stage 1/5: Updating System Packages"
+print_stage "Stage 1/3: Updating System Packages"
 echo "Fetching latest package lists and upgrading system (this might take a minute)..."
 
 apt-get update -y
@@ -78,7 +91,7 @@ print_success "System updated successfully!"
 # ==========================================
 # Stage 2: Install Dependencies
 # ==========================================
-print_stage "Stage 2/5: Installing Required Dependencies"
+print_stage "Stage 2/3: Installing Required Dependencies"
 echo "Installing core utilities (curl, wget, git, build-essential)..."
 apt-get install -y curl wget git build-essential jq python3
 
@@ -96,7 +109,7 @@ print_success "Dependencies installed! (Node.js version: $node_version)"
 # ==========================================
 # Stage 3: Install Codex CLI
 # ==========================================
-print_stage "Stage 3/5: Installing Codex CLI"
+print_stage "Stage 3/3: Installing Codex CLI"
 echo "Installing @openai/codex globally via npm..."
 
 npm install -g @openai/codex
@@ -105,29 +118,10 @@ print_success "Codex CLI installed successfully!"
 codex --version || true
 
 # ==========================================
-# Stage 4: 3rd Party API Provider Prompt
+# Setup Complete
 # ==========================================
-print_stage "Stage 4/5: API Configuration"
-
-# Set a timeout of 30 seconds, default to 'Y' if user doesn't answer
-echo -e "${YELLOW}Would you like to use a 3rd Party API Provider? [Y/n]${NC}"
-read -t 30 -r use_3p_api || use_3p_api="Y"
-use_3p_api=${use_3p_api:-Y} # Apply default if user just pressed Enter
-
-# ==========================================
-# Stage 5: Conditional Execution
-# ==========================================
-if [[ "$use_3p_api" =~ ^[Yy]$ ]]; then
-    print_stage "Stage 5/5: Launching 3rd Party API Setup"
-    echo -e "${GREEN}Executing secondary setup script. This script will now hand over control and exit.${NC}"
-    
-    # Run the user-provided script and exit the current script immediately
-    curl -fsSL https://raw.githubusercontent.com/svk27/Project-Mango/refs/heads/main/Layer2Setup/codex-3papi-setup.sh | bash
-    exit 0
-else
-    print_stage "Stage 5/5: Setup Complete!"
-    echo -e "${GREEN}Your system is fully prepared, and Codex CLI is ready to use natively.${NC}"
-    echo -e "To authenticate with your OpenAI account, run: ${YELLOW}codex login${NC}"
-    echo -e "To start a project session, navigate to your directory and run: ${YELLOW}codex${NC}"
-    exit 0
-fi
+print_stage "Setup Complete!"
+echo -e "${GREEN}Your Debian 13 system is fully prepared, and Codex CLI is ready to use natively.${NC}"
+echo -e "To authenticate with your OpenAI account, run: ${YELLOW}codex login${NC}"
+echo -e "To start a project session, navigate to your directory and run: ${YELLOW}codex${NC}"
+exit 0
