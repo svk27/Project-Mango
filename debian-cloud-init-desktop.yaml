@@ -4,20 +4,40 @@
 package_update: true
 package_upgrade: true
 
-# Install base packages
+# 2) Install base packages
 packages:
-  - xfce4
-  - xfce4-goodies
+  # Desktop & Base
+  - kde-plasma-desktop
   - xrdp
   - firefox-esr
   - wget
   - curl
   - gpg
   - apt-transport-https
+  # Build Tools & Languages
+  - build-essential
+  - python3
+  - python3-pip
+  - python3-venv
+  - git
+  # Agent Utilities
+  - tmux
+  - jq
+  - unzip
 
 runcmd:
   # Update apt cache for dependencies before manual installs
   - apt-get update -y
+
+  # 3) Install Docker (Crucial for AI Agent sandboxing)
+  - curl -fsSL https://get.docker.com -o get-docker.sh
+  - sh get-docker.sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  # 4) Install Node.js (Current LTS via NodeSource)
+  - curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+  - apt-get install -y nodejs
 
   # 5) Install VS Code via direct .deb download
   - curl -L -o /tmp/vscode.deb "https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64"
